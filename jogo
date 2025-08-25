@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Snake com Paredes — Feira de Profissões</title>
+  <style>
+    :root {
+      --bg: #0b1220;        /* fundo geral */
+      --panel: #0f172a;     /* painéis */
+      --line: #1e293b;      /* linhas/grade */
+      --text: #e5e7eb;      /* texto */
+      --muted: #9ca3af;     /* texto fraco */
+      --accent: #6366f1;    /* roxo/indigo */
+      --danger: #ef4444;    /* vermelho */
+      --ok: #22c55e;        /* verde */
+      --wall: #64748b;      /* parede */
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: var(--bg); color: var(--text);
+      display: flex; flex-direction: column; align-items: stretch; min-height: 100vh;
+    }
+    header, footer { max-width: 1000px; width: 100%; margin: 0 auto; padding: 16px; }
+    header h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); }
+    header .tag { color: var(--muted); font-size: 14px; }
+
+    main { max-width: 1000px; width: 100%; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 900px) {
+      main { grid-template-columns: 3fr 2fr; }
+    }
+
+    .card { background: var(--panel); border: 1px solid #0b1220; box-shadow: 0 6px 24px rgba(0,0,0,.35); border-radius: 16px; padding: 16px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+    .badge { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .badge.primary { background: var(--accent); color: white; }
+    .badge.subtle { background: #111827; color: #cbd5e1; border: 1px solid #0b1220; }
+    .badge.danger { background: var(--danger); color: white; }
+
+    .btn { appearance: none; border: 0; border-radius: 14px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    .btn.primary { background: var(--accent); color: white; }
+    .btn.ghost { background: #111827; color: #e5e7eb; }
+
+    .canvas-wrap { width: 100%; max-width: 480px; aspect-ratio: 1 / 1; margin: 0 auto; position: relative; }
+    canvas { width: 100%; height: 100%; display: block; background: var(--panel); border-radius: 14px; border: 1px solid #0b1220; }
+
+    .touch-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 300px; margin: 14px auto 0; user-select: none; }
+    .touch-grid .spacer { height: 42px; }
+    .touch-btn { height: 42px; border-radius: 12px; background: #111827; color: #e5e7eb; font-size: 18px; font-weight: 800; border: 1px solid #0b1220; }
+
+    .controls { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 14px; color: var(--muted); }
+    input[type="range"] { width: 160px; }
+
+    .list { margin: 0; padding-left: 18px; color: #cbd5e1; font-size: 14px; }
+    .list li { margin: 6px 0; }
+
+    .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); border-radius: 14px; text-align: center; padding: 20px; }
+    .overlay.show { display: flex; }
+    .overlay .panel { background: #0b1220; border: 1px solid #111827; padding: 16px 18px; border-radius: 14px; }
+    .overlay h2 { margin: 0 0 6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <h1>Snake com Paredes</h1>
+      <div class="tag">Feira de Profissões · Engenheiro de Software</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="row" style="margin-bottom:12px">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+          <span id="score" class="badge primary">Score: 0</span>
+          <span id="high" class="badge subtle">Recorde: 0</span>
+          <span id="state" class="badge danger" style="display:none">Game Over</span>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <button id="btnToggle" class="btn primary">Iniciar</button>
+          <button id="btnReset" class="btn ghost">Reiniciar</button>
+        </div>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="game" width="400" height="400"></canvas>
+        <div class="overlay" id="overlay">
+          <div class="panel">
+            <h2>Game Over</h2>
+            <div style="color:#cbd5e1; margin-bottom:10px">Toque em Reiniciar para jogar novamente</div>
+            <button id="btnOverlayReset" class="btn primary">Reiniciar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <label for="speed">Velocidade</label>
+        <input id="speed" type="range" min="2" max="20" value="8" />
+        <span id="fpsLabel">8 fps</span>
+      </div>
+
+      <div class="touch-grid">
+        <div class="spacer"></div>
+        <button class="touch-btn" data-dir="up">▲</button>
+        <div class="spacer"></div>
+        <button class="touch-btn" data-dir="left">◀</button>
+        <div class="spacer"></div>
+        <button class="touch-btn" data-dir="right">▶</button>
+        <div class="spacer"></div>
+        <button class="touch-btn" data-dir="down">▼</button>
+        <div class="spacer"></div>
+      </div>
+
+      <ul class="list">
+        <li>Setas/WASD ou botões para mover. Espaço: Iniciar/Pausar. R: Reiniciar.</li>
+        <li>Paredes nas bordas: encostou, perdeu.</li>
+        <li>Recorde salvo no navegador (localStorage).</li>
+      </ul>
+    </section>
+
+    <aside class="card">
+      <h3 style="margin-top:0">O que faz um Engenheiro de Software?</h3>
+      <ul class="list">
+        <li>Projeta, implementa e mantém sistemas de software (apps, sites, jogos).</li>
+        <li>Resolve problemas com lógica, dados e colaboração em equipe.</li>
+        <li>Versão demo feita em um único arquivo HTML, ideal para feira.</li>
+      </ul>
+    </aside>
+  </main>
+
+  <footer>
+    <div style="font-size:12px; color: var(--muted)">© <span id="year"></span> Demonstração educacional — Snake com Paredes</div>
+  </footer>
+
+  <script>
+    (function() {
+      const size = 20;         // 20x20 células
+      const cell = 20;         // 20 px por célula -> 400px
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const btnToggle = document.getElementById('btnToggle');
+      const btnReset = document.getElementById('btnReset');
+      const btnOverlayReset = document.getElementById('btnOverlayReset');
+      const scoreEl = document.getElementById('score');
+      const highEl = document.getElementById('high');
+      const stateEl = document.getElementById('state');
+      const speedEl = document.getElementById('speed');
+      const fpsLabel = document.getElementById('fpsLabel');
+      const overlay = document.getElementById('overlay');
+
+      document.getElementById('year').textContent = new Date().getFullYear();
+
+      // Estado
+      let snake = [{x:10, y:10}];
+      let dir = {x:1, y:0};
+      let food = randFood({ avoid: snake });
+      let running = false;
+      let gameOver = false;
+      let score = 0;
+      let high = Number(localStorage.getItem('snake-high') || '0');
+      highEl.textContent = 'Recorde: ' + high;
+
+      let fps = Number(speedEl.value);
+      let nextTime = 0;
+      let rafId = 0;
+
+      // Controles de teclado
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if ((k === 'arrowup' || k === 'w') && dir.y !== 1) dir = {x:0,y:-1};
+        else if ((k === 'arrowdown' || k === 's') && dir.y !== -1) dir = {x:0,y:1};
+        else if ((k === 'arrowleft' || k === 'a') && dir.x !== 1) dir = {x:-1,y:0};
+        else if ((k === 'arrowright' || k === 'd') && dir.x !== -1) dir = {x:1,y:0};
+        else if (k === ' ') toggleRun();
+        else if (k === 'r') reset();
+      });
+
+      // Botões touch
+      document.querySelectorAll('.touch-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const d = btn.getAttribute('data-dir');
+          if (d === 'up' && dir.y !== 1) dir = {x:0,y:-1};
+          if (d === 'down' && dir.y !== -1) dir = {x:0,y:1};
+          if (d === 'left' && dir.x !== 1) dir = {x:-1,y:0};
+          if (d === 'right' && dir.x !== -1) dir = {x:1,y:0};
+        });
+      });
+
+      // Gestos de swipe (básico)
+      let touchStart = null;
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches[0]) touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+      });
+      canvas.addEventListener('touchmove', (e) => {
+        if (!touchStart || !(e.touches && e.touches[0])) return;
+        const dx = e.touches[0].clientX - touchStart.x;
+        const dy = e.touches[0].clientY - touchStart.y;
+        if (Math.abs(dx) > 24 || Math.abs(dy) > 24) {
+          if (Math.abs(dx) > Math.abs(dy)) {
+            if (dx > 0 && dir.x !== -1) dir = {x:1,y:0}; else if (dx < 0 && dir.x !== 1) dir = {x:-1,y:0};
+          } else {
+            if (dy > 0 && dir.y !== -1) dir = {x:0,y:1}; else if (dy < 0 && dir.y !== 1) dir = {x:0,y:-1};
+          }
+          touchStart = null;
+        }
+      });
+
+      // UI
+      btnToggle.addEventListener('click', toggleRun);
+      btnReset.addEventListener('click', reset);
+      btnOverlayReset.addEventListener('click', reset);
+      speedEl.addEventListener('input', () => {
+        fps = Number(speedEl.value); fpsLabel.textContent = fps + ' fps';
+      });
+      fpsLabel.textContent = fps + ' fps';
+
+      // Loop
+      function loop(t) {
+        if (!running || gameOver) return;
+        const interval = 1000 / Math.max(2, Math.min(20, fps));
+        if (!nextTime) nextTime = t;
+        if (t - nextTime >= interval) {
+          nextTime = t;
+          tick();
+          draw();
+        }
+        rafId = requestAnimationFrame(loop);
+      }
+
+      function toggleRun() {
+        if (gameOver) return;
+        running = !running;
+        btnToggle.textContent = running ? 'Pausar' : 'Iniciar';
+        if (running) { nextTime = 0; rafId = requestAnimationFrame(loop); }
+        else cancelAnimationFrame(rafId);
+      }
+
+      function reset() {
+        running = false; gameOver = false; cancelAnimationFrame(rafId);
+        snake = [{x:10, y:10}]; dir = {x:1,y:0};
+        score = 0; updateScore();
+        food = randFood({ avoid: snake });
+        overlay.classList.remove('show'); stateEl.style.display = 'none';
+        btnToggle.textContent = 'Iniciar';
+        draw();
+      }
+
+      function tick() {
+        const head = snake[0];
+        const nx = head.x + dir.x;
+        const ny = head.y + dir.y;
+
+        // Parede: bordas são proibidas
+        if (nx < 1 || ny < 1 || nx >= size - 1 || ny >= size - 1) {
+          return gameOverNow();
+        }
+        // Corpo
+        if (snake.some(p => p.x === nx && p.y === ny)) {
+          return gameOverNow();
+        }
+
+        const newHead = {x:nx, y:ny};
+        snake = [newHead, ...snake];
+
+        if (nx === food.x && ny === food.y) {
+          score++; updateScore();
+          food = randFood({ avoid: snake });
+        } else {
+          snake.pop();
+        }
+      }
+
+      function gameOverNow() {
+        gameOver = true; running = false; cancelAnimationFrame(rafId);
+        stateEl.style.display = 'inline-flex';
+        overlay.classList.add('show');
+        if (score > high) { high = score; localStorage.setItem('snake-high', String(high)); }
+        highEl.textContent = 'Recorde: ' + high;
+      }
+
+      function updateScore() { scoreEl.textContent = 'Score: ' + score; }
+
+      // Desenho
+      function draw() {
+        // fundo
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--panel');
+        ctx.fillRect(0, 0, size * cell, size * cell);
+
+        // grade
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--line');
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= size; i++) {
+          ctx.beginPath(); ctx.moveTo(i*cell, 0); ctx.lineTo(i*cell, size*cell); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, i*cell); ctx.lineTo(size*cell, i*cell); ctx.stroke();
+        }
+
+        // paredes (bordas)
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--wall');
+        for (let i = 0; i < size; i++) {
+          // topo e base
+          ctx.fillRect(i*cell, 0, cell, cell);
+          ctx.fillRect(i*cell, (size-1)*cell, cell, cell);
+          // esquerda e direita
+          ctx.fillRect(0, i*cell, cell, cell);
+          ctx.fillRect((size-1)*cell, i*cell, cell, cell);
+        }
+
+        // comida
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--danger');
+        ctx.fillRect(food.x*cell, food.y*cell, cell, cell);
+
+        // cobra
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--ok');
+        for (let i=0;i<snake.length;i++) {
+          const s = snake[i];
+          const pad = i===0 ? 2 : 4;
+          ctx.fillRect(s.x*cell+pad, s.y*cell+pad, cell-pad*2, cell-pad*2);
+        }
+      }
+
+      function randFood({ avoid }) {
+        // alimento não pode nascer na parede nem em cima da cobra
+        while (true) {
+          const fx = 1 + Math.floor(Math.random()*(size-2));
+          const fy = 1 + Math.floor(Math.random()*(size-2));
+          if (!avoid.some(p => p.x===fx && p.y===fy)) return {x:fx, y:fy};
+        }
+      }
+
+      // Primeira pintura
+      draw();
+    })();
+  </script>
+</body>
+</html>
